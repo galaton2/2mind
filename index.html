@@ -3,73 +3,73 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
-<title>Второй мозг</title>
-<meta name="description" content="Личная база знаний с ИИ — заметки, дневник, задачи и чат с вашим вторым мозгом" />
-<meta name="theme-color" content="#000000" />
+<title>Infinity Brain</title>
+<meta name="description" content="Умное хранилище медиа и личная база знаний с ИИ" />
+<meta name="theme-color" content="#0B0B0D" />
 
 <!-- Telegram Mini Apps SDK -->
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-<!-- Один шрифт для всего интерфейса — меньше визуального шума -->
+<!-- Шрифты для интерфейса (объединили для Infinity Storage и Второго мозга) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
+<!-- Фоновые свечения в стиле Infinity Storage -->
+<div class="ambient-glow"></div>
+<div class="ambient-glow secondary"></div>
+
 <div id="app" class="app">
 
-  <!-- ==================== ШАПКА ====================
-       Только заголовок — иконки карты и настроек убраны отсюда,
-       чтобы не дублировать нижнюю навигацию (карта теперь часть
-       вкладки «Записи», настройки — часть вкладки «Профиль»). -->
+  <!-- ==================== ШАПКА ==================== -->
   <header class="topbar">
     <div class="topbar__titles">
-      <h1 class="topbar__title">Второй мозг</h1>
-      <p class="topbar__subtitle" id="topbarSubtitle">каталог мыслей</p>
+      <h1 class="topbar__title app-title">Infinity Brain</h1>
+      <p class="topbar__subtitle" id="topbarSubtitle">хранилище и каталог мыслей</p>
     </div>
   </header>
 
   <!-- ==================== ЭКРАНЫ ==================== -->
   <main class="views" id="views">
 
-    <!-- ---------- ГЛАВНАЯ ----------
-         Только одно действие (захват мысли) + свежая лента.
-         Никакой статистики и графиков — им место на вкладке «Профиль». -->
-    <section class="view" id="view-home" data-view="home">
-
-      <form class="capture" id="captureForm">
-        <textarea id="captureInput" class="capture__input" placeholder="Запишите мысль, идею, задачу…" rows="1"></textarea>
-        <div class="capture__row">
-          <select id="captureCategory" class="capture__select"></select>
-          <button type="submit" class="btn btn--brass capture__submit">
-            <span>Сохранить</span>
-          </button>
+    <!-- ---------- МЕДИА (Главная) ---------- 
+         Здесь грузятся фотки/видосы с твоего Synology -->
+    <section class="view is-active" id="view-home" data-view="home">
+      
+      <!-- Карточка Infinity Storage -->
+      <div class="storage-hero">
+        <h1 class="cd-hero-title">Infinity Storage</h1>
+        <div class="storage-labels">
+          <span class="storage-used" id="status-text">Синхронизация...</span>
+          <span class="storage-infinity">∞</span>
         </div>
-      </form>
-
-      <div class="section-head" style="margin-top:22px">
-        <h2 class="section-head__title">Последние записи</h2>
-        <button class="linkbtn" data-nav="records" type="button">все →</button>
+        <div class="hero-progress-track"><div class="hero-progress-fill" style="width: 100%"></div></div>
+        <div class="storage-subtext">Синхронизировано с Synology NAS</div>
       </div>
-      <div class="cards-list" id="homeRecent"></div>
+
+      <!-- Лоадер для фоток -->
+      <div id="loader" class="app-loader" style="position:relative; height: 160px; background: transparent; z-index: 1;">
+        <div class="loader-spinner"></div>
+        <div class="loader-text">ПОЛУЧЕНИЕ ФАЙЛОВ...</div>
+      </div>
+
+      <!-- Контейнер для сетки фоток с сервера -->
+      <div class="grid-gallery" id="gallery-container" style="display:none; margin-top: 18px;"></div>
 
     </section>
 
     <!-- ---------- ЗАПИСИ ----------
-         Объединяет то, что раньше было тремя разными вкладками
-         (Заметки / Дневник / Задачи) плюс карту мыслей — одна лента,
-         один переключатель типа записи сверху, один способ смотреть на неё
-         (список или карта). -->
+         Объединяет Заметки, Дневник и Карту мыслей. Задачи полностью удалены. -->
     <section class="view" id="view-records" data-view="records">
 
       <div class="records-head">
         <div class="segmented" id="recordsTypeSeg">
           <button class="segmented__btn is-active" data-rtype="notes" type="button">Заметки</button>
           <button class="segmented__btn" data-rtype="journal" type="button">Дневник</button>
-          <button class="segmented__btn" data-rtype="tasks" type="button">Задачи</button>
         </div>
         <button class="iconbtn iconbtn--sq" id="btnToggleSearch" type="button" title="Поиск" aria-label="Поиск">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
@@ -81,34 +81,18 @@
 
       <div class="searchbar searchbar--collapsible" id="searchBarWrap" hidden>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-        <input type="text" id="recordsSearch" placeholder="Поиск по записям…" />
+        <input type="text" id="recordsSearch" placeholder="Поиск по заметкам…" />
         <button class="searchbar__close" id="btnCloseSearch" type="button" aria-label="Закрыть поиск">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
       </div>
 
-      <!-- ---- список (заметки / задачи) ---- -->
+      <!-- ---- список заметок ---- -->
       <div id="recordsListWrap">
-
-        <!-- задачи: быстрое добавление — видно только при фильтре «Задачи» -->
-        <form class="task-add" id="taskAddForm" hidden>
-          <input type="text" id="taskAddInput" placeholder="Новая задача…" />
-          <button type="submit" class="btn btn--brass">Добавить</button>
-        </form>
-        <button class="btn btn--ghost btn--sm settings-fullwidth" id="btnScanNotesForTasks" hidden style="margin-bottom:12px">
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="12" height="14" rx="2"/><path d="M6 8h6M6 11h6M6 14h4"/><circle cx="18" cy="16" r="3.4"/><path d="M20.4 18.4L23 21"/></svg>
-          Найти задачи в заметках
-        </button>
-        <div class="chips-row" id="tasksStatusChips" hidden>
-          <button class="chip is-active" data-taskfilter="open" type="button">Открытые</button>
-          <button class="chip" data-taskfilter="done" type="button">Выполненные</button>
-        </div>
-
         <div class="cards-list" id="recordsList"></div>
 
-        <!-- ---- дневник: отдельная, самостоятельная панель ---- -->
+        <!-- ---- дневник: панель ---- -->
         <div class="journal-panel" id="journalPanel" hidden>
-
           <div class="journal-panel__head">
             <div>
               <h2 class="journal-panel__title">Дневник</h2>
@@ -116,9 +100,7 @@
             </div>
             <div class="journal-streak" id="journalStreak"></div>
           </div>
-
           <div class="journal-week" id="journalWeek"></div>
-
           <div class="journal-card">
             <div class="journal-card__moods" id="moodRow"></div>
             <textarea id="journalInput" class="journal-card__input" placeholder="Как прошёл день? Что важного случилось…" rows="4"></textarea>
@@ -130,12 +112,10 @@
               <button class="btn btn--brass btn--sm" id="btnJournalSave" type="button">Сохранить</button>
             </div>
           </div>
-
           <div id="insightCard" class="insight-card" hidden>
             <div class="insight-card__label">Наблюдение ИИ</div>
             <div class="insight-card__text" id="insightText"></div>
           </div>
-
           <div class="section-head" style="margin-top:22px">
             <h2 class="section-head__title">История</h2>
             <button class="linkbtn" id="btnWeeklyInsight" type="button">
@@ -172,12 +152,8 @@
       </form>
     </section>
 
-    <!-- ---------- ПРОФИЛЬ ----------
-         Сюда убрана вся аналитика (график, серия дней, статистика) —
-         кому интересно, тот зайдёт сам, а не будет натыкаться на неё
-         каждый раз на главном экране. Плюс настройки и данные. -->
+    <!-- ---------- ПРОФИЛЬ (Статистика и Настройки) ---------- -->
     <section class="view" id="view-profile" data-view="profile">
-
       <div class="section-head" style="margin-top:0">
         <h2 class="section-head__title">Статистика</h2>
       </div>
@@ -201,7 +177,6 @@
       <div class="section-head">
         <h2 class="section-head__title">Настройки</h2>
       </div>
-
       <div class="settings-block">
         <label class="settings-label">Together API ключ</label>
         <div class="settings-inputrow">
@@ -210,27 +185,16 @@
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
         </div>
-        <p class="settings-hint">Ключ хранится только в этом браузере и нужен, чтобы работали ИИ-функции (обработка заметки, чат, дневник). Без ключа заметки и задачи всё равно можно вести.</p>
+        <p class="settings-hint">Ключ нужен, чтобы работали ИИ-функции. Без него синхронизация фото и базовые заметки всё равно работают.</p>
       </div>
-
       <div class="settings-block">
         <label class="settings-label">Модель</label>
         <input type="text" id="settingsModel" list="modelList" placeholder="meta-llama/Llama-3.3-70B-Instruct-Turbo" />
         <datalist id="modelList">
           <option value="meta-llama/Llama-3.3-70B-Instruct-Turbo">
           <option value="meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo">
-          <option value="Qwen/Qwen2.5-72B-Instruct-Turbo">
-          <option value="deepseek-ai/DeepSeek-V3">
-          <option value="mistralai/Mixtral-8x7B-Instruct-v0.1">
-          <option value="openai/gpt-oss-20b">
         </datalist>
       </div>
-
-      <div class="settings-block">
-        <label class="settings-label">Как вас называть</label>
-        <input type="text" id="settingsUserName" placeholder="Имя" />
-      </div>
-
       <div class="settings-block">
         <div class="settings-row-between">
           <span class="settings-hint" style="margin:0">Проверить подключение к Together</span>
@@ -238,7 +202,6 @@
         </div>
         <p class="settings-status" id="apiTestStatus"></p>
       </div>
-
       <button class="btn btn--brass btn--full" id="btnSaveSettings" type="button">Сохранить настройки</button>
 
       <div class="settings-block" style="margin-top:22px">
@@ -250,34 +213,22 @@
       </div>
 
       <div class="settings-block">
-        <label class="settings-label">Данные</label>
+        <label class="settings-label">Данные заметок</label>
         <div class="settings-actions">
-          <button class="btn btn--ghost btn--sm" id="btnExport" type="button">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v11m0 0l-4-4m4 4l4-4"/><path d="M5 21h14"/></svg>
-            Экспорт JSON
-          </button>
-          <label class="btn btn--ghost btn--sm" for="importFile">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21V10m0 0l-4 4m4-4l4 4"/><path d="M5 3h14"/></svg>
-            Импорт JSON
-          </label>
+          <button class="btn btn--ghost btn--sm" id="btnExport" type="button">Экспорт JSON</button>
+          <label class="btn btn--ghost btn--sm" for="importFile">Импорт JSON</label>
           <input type="file" id="importFile" accept="application/json" hidden />
         </div>
-        <button class="btn btn--danger btn--sm settings-fullwidth" id="btnClearAll" type="button">Удалить все данные</button>
-      </div>
-
-      <div class="settings-block">
-        <p class="settings-footnote">Второй мозг · фронтенд-прототип · данные локальные</p>
+        <button class="btn btn--danger btn--sm settings-fullwidth" id="btnClearAll" type="button">Очистить локальные данные</button>
       </div>
     </section>
-
   </main>
 
-  <!-- ==================== НИЖНЯЯ НАВИГАЦИЯ ====================
-       Единственная система навигации в приложении: 4 раздела. -->
+  <!-- ==================== НИЖНЯЯ НАВИГАЦИЯ ==================== -->
   <nav class="tabbar" id="tabbar">
     <button class="tabbar__item is-active" data-nav="home" type="button">
-      <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
-      <span>Главная</span>
+      <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      <span>Медиа</span>
     </button>
     <button class="tabbar__item" data-nav="records" type="button">
       <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
@@ -292,6 +243,17 @@
       <span>Профиль</span>
     </button>
   </nav>
+</div>
+
+<!-- ==================== МОДАЛКА: ПРОСМОТР ФОТО (Из твоего сервера) ==================== -->
+<div class="modal" id="photo-modal" hidden style="background: rgba(0,0,0,0.92); z-index: 4000; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+  <button class="iconbtn" id="photo-modal-close" style="position: absolute; top: 20px; right: 20px; color: #fff; background: rgba(255,255,255,0.1);">✕</button>
+  <div class="modal-media-container" style="width: 100%; max-height: 75vh; display: flex; justify-content: center; padding: 20px;">
+    <img id="modal-image" src="" alt="Photo" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 12px;" />
+  </div>
+  <div style="position: absolute; bottom: 40px; width: 100%; padding: 0 24px;">
+    <button class="btn btn--danger btn--full" id="delete-btn">Удалить файл</button>
+  </div>
 </div>
 
 <!-- ==================== МОДАЛКА: ЗАМЕТКА ==================== -->
@@ -319,13 +281,11 @@
       <input type="text" id="noteTags" class="modal__tags-input" placeholder="теги через запятую" />
     </div>
 
-    <!-- Одна кнопка вместо трёх: один клик — категория, теги, заголовок
-         и задачи находятся сразу все вместе. Сжатие текста — отдельное,
-         менее заметное действие, потому что оно необратимо меняет текст. -->
+    <!-- ИИ функции без вытаскивания задач -->
     <div class="modal__ai-row">
       <button class="btn btn--brass modal__ai-main" id="btnAutoProcess" type="button">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" stroke="none"><path d="M12 2l1.8 5.4L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.6L12 2z"/></svg>
-        Обработать заметку
+        Подобрать категорию и теги
       </button>
     </div>
     <div class="modal__ai-output" id="noteAiOutput" hidden></div>
@@ -341,19 +301,7 @@
   </div>
 </div>
 
-<!-- ==================== МОДАЛКА: ВЫБОР ЗАМЕТОК ДЛЯ ЗАДАЧ ==================== -->
-<div class="modal" id="pickerModal" hidden>
-  <div class="modal__sheet">
-    <div class="modal__handle"></div>
-    <div class="modal__head">
-      <h2 class="modal__heading">Из какой заметки искать задачи?</h2>
-      <button class="iconbtn" id="pickerModalClose" type="button" aria-label="Закрыть">✕</button>
-    </div>
-    <div class="cards-list" id="pickerList"></div>
-  </div>
-</div>
-
-<!-- ==================== ОБУЧАЛКА (первый запуск) ==================== -->
+<!-- ==================== ОБУЧАЛКА ==================== -->
 <div class="onboarding" id="onboarding" hidden>
   <button class="onboarding__skip" id="onboardingSkip" type="button">Пропустить</button>
   <div class="onboarding__track" id="onboardingTrack"></div>
