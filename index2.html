@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#020204">
+  <title>Infinity Data Base</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <style>
+    /* ── Files top-bar ── */
+    .files-topbar {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 18px; min-height: 42px;
+    }
+    .files-topbar-title {
+      font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 700;
+      color: var(--text-main); letter-spacing: -0.025em; flex: 1;
+    }
+    .back-btn {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: var(--glass-bg); border: 1px solid var(--border);
+      color: var(--text-main); display: flex; align-items: center;
+      justify-content: center; cursor: pointer; flex-shrink: 0;
+      transition: background .18s, transform .15s var(--spring);
+    }
+    .back-btn:active { transform: scale(.88); background: rgba(255,255,255,.06); }
+
+    /* ── Folder grid ── */
+    .folder-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 11px; }
+    .folder-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 20px 16px 18px;
+      cursor: pointer; display: flex; flex-direction: column; gap: 14px;
+      position: relative; overflow: hidden; user-select: none;
+      -webkit-user-select: none; min-height: 126px;
+      transition: transform .18s var(--spring), border-color .2s, box-shadow .25s;
+    }
+    .folder-card:active { transform: scale(.93); }
+    .folder-card.holding { transform: scale(.90); opacity: .65; }
+    .folder-card-icon {
+      width: 46px; height: 46px; border-radius: 13px;
+      display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0;
+    }
+    .folder-card-info { display: flex; flex-direction: column; gap: 3px; margin-top: auto; }
+    .folder-card-name {
+      font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 700;
+      color: var(--text-main); letter-spacing: -.015em;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .folder-card-count { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+    .folder-card::before {
+      content: ''; position: absolute; left: 0; top: 16px; bottom: 16px;
+      width: 3px; border-radius: 0 3px 3px 0;
+      background: var(--folder-accent, var(--blue)); opacity: .7;
+    }
+
+    /* ── Video card ── */
+    .grid-item.video .vid-thumb,
+    .grid-item.animation .vid-thumb,
+    .grid-item.video_note .vid-thumb {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .vid-play-badge {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,.28); pointer-events: none;
+    }
+    .vid-play-badge svg {
+      width: 36px; height: 36px; color: rgba(255,255,255,.9);
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,.5));
+    }
+
+    /* ── Load-more sentinel / spinner ── */
+    #load-sentinel { height: 1px; margin: 0; }
+    .load-spinner-row {
+      display: flex; justify-content: center; align-items: center;
+      padding: 22px 0; grid-column: 1/-1;
+    }
+    .load-spinner-row .mini-spin {
+      width: 24px; height: 24px;
+      border: 2px solid var(--text-hint); border-top-color: var(--blue);
+      border-radius: 50%; animation: spin .8s linear infinite;
+    }
+
+    /* ══════════════════════════════════
+       MULTI-SELECT
+    ══════════════════════════════════ */
+    /* checkmark on each card */
+    .grid-item .check-ring {
+      position: absolute; top: 9px; left: 9px; z-index: 10;
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 2px solid rgba(255,255,255,.55);
+      background: rgba(0,0,0,.35);
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none;
+      opacity: 0; transform: scale(.7);
+      transition: opacity .18s, transform .18s var(--spring), background .15s, border-color .15s;
+    }
+    body.multi-select .check-ring { opacity: 1; transform: scale(1); }
+    .grid-item.selected .check-ring {
+      background: var(--blue); border-color: var(--blue);
+    }
+    .grid-item.selected .check-ring::after {
+      content: '';
+      width: 5px; height: 9px;
+      border-right: 2px solid #fff; border-bottom: 2px solid #fff;
+      transform: rotate(45deg) translate(-1px,-1px);
+      display: block;
+    }
+    .grid-item.selected {
+      outline: 2px solid var(--blue);
+      outline-offset: -2px;
+    }
+
+    /* floating action bar */
+    .multiselect-bar {
+      position: fixed; bottom: 108px; left: 18px; right: 18px;
+      background: var(--elevated);
+      border: 1px solid var(--border-hi);
+      border-radius: var(--r-lg);
+      padding: 14px 16px;
+      display: flex; align-items: center; gap: 10px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.7);
+      z-index: 200;
+      transform: translateY(20px); opacity: 0;
+      transition: transform .28s var(--spring), opacity .22s;
+      pointer-events: none;
+    }
+    .multiselect-bar.visible { transform: translateY(0); opacity: 1; pointer-events: all; }
+    .ms-count {
+      font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 700;
+      color: var(--text-main); flex: 1;
+    }
+    .ms-btn {
+      padding: 9px 16px; border-radius: var(--r-md); font-size: 13px;
+      font-weight: 700; cursor: pointer; border: none; font-family: 'Plus Jakarta Sans', sans-serif;
+      transition: opacity .15s, transform .12s var(--spring);
+    }
+    .ms-btn:active { transform: scale(.93); opacity: .8; }
+    .ms-btn.del   { background: var(--danger); color: #fff; }
+    .ms-btn.move  { background: var(--blue);   color: #fff; }
+    .ms-btn.cancel{ background: var(--elevated); color: var(--text-muted); border: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+
+<!-- ── Splash ── -->
+<div id="app-loader" class="app-loader">
+  <div class="loader-spinner"></div>
+  <div class="loader-text">Syncing Vault…</div>
+</div>
+
+<!-- ── Ambient ── -->
+<div class="ambient-glow"></div>
+<div class="ambient-glow secondary"></div>
+
+<div class="container">
+
+  <!-- ══ HOME ══ -->
+  <div id="tab-home" class="tab-content active">
+    <div class="header-top">
+      <h1 class="app-title">Infinity Data Base</h1>
+      <button class="icon-btn" onclick="switchTab('profile',null)">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </button>
+    </div>
+
+    <div class="storage-hero">
+      <h2 class="cd-hero-title heading">Personal Cloud</h2>
+      <div class="storage-labels">
+        <span class="storage-used" id="dataUsedText">0.0 MB</span>
+        <span class="storage-infinity">∞</span>
+      </div>
+      <div class="hero-progress-track">
+        <div class="hero-progress-fill" id="dataUsedFill"></div>
+      </div>
+      <p class="storage-subtext">Infinite capacity · Synology Server</p>
+    </div>
+
+    <div class="info-accordion" onclick="toggleAccordion(this)">
+      <div class="accordion-header">
+        <div class="accordion-title-wrap">
+          <svg class="svg-icon accordion-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span class="accordion-title">Storage Data &amp; Privacy</span>
+        </div>
+        <svg class="svg-icon accordion-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-content">
+          All your data is securely stored within the private Telegram chat with our bot.
+          When you send a file, the bot processes it and securely transfers it to your
+          Infinity Data Base on the Synology Server. No third-party access, full privacy.
+        </div>
+      </div>
+    </div>
+
+    <div class="status-grid">
+      <div class="status-card">
+        <div>
+          <div class="status-title">Total Vault Assets</div>
+          <div class="status-value" id="totalFilesCount">0</div>
+        </div>
+        <button class="section-action" onclick="switchTab('files',document.getElementById('nav-files'))">Browse →</button>
+      </div>
+    </div>
+  </div><!-- /home -->
+
+  <!-- ══ FILES ══ -->
+  <div id="tab-files" class="tab-content">
+    <div class="files-topbar" id="filesTopbar"></div>
+
+    <div class="search-box" style="margin-bottom:16px;">
+      <svg class="svg-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" class="search-input" id="searchInput" placeholder="Search folders…" oninput="handleSearch()">
+    </div>
+
+    <!-- folder list -->
+    <div id="folderGridView">
+      <div class="folder-grid" id="folderGrid"></div>
+    </div>
+
+    <!-- folder contents -->
+    <div id="folderContentsView" style="display:none;">
+      <div class="grid-gallery" id="folderGallery"></div>
+      <!-- infinite-scroll sentinel -->
+      <div id="load-sentinel"></div>
+    </div>
+  </div><!-- /files -->
+
+  <!-- ══ PROFILE ══ -->
+  <div id="tab-profile" class="tab-content">
+    <h1 class="heading tab-page-title">Account</h1>
+    <div class="storage-hero" style="align-items:center;text-align:center;padding:40px 24px;">
+      <div class="profile-avatar" id="userAvatar">B</div>
+      <h2 class="heading" id="userName" style="font-size:26px;margin-bottom:4px;color:#fff;">Bekhruz</h2>
+      <p style="color:var(--text-muted);font-size:13px;letter-spacing:.04em;text-transform:uppercase;font-weight:600;">Master Admin</p>
+    </div>
+  </div>
+</div><!-- /container -->
+
+<!-- ── Nav bar ── -->
+<div class="nav-container">
+  <div class="nav-bar">
+    <button class="nav-item active" id="nav-home"  onclick="switchTab('home',this)">
+      <svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Home
+    </button>
+    <button class="nav-item" id="nav-files" onclick="switchTab('files',this)">
+      <svg class="svg-icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      Files
+    </button>
+    <button class="nav-item" onclick="openSyncModal()">
+      <svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Sync
+    </button>
+  </div>
+</div>
+
+<!-- ── Multi-select action bar ── -->
+<div class="multiselect-bar" id="multiselectBar">
+  <span class="ms-count" id="msCount">0 selected</span>
+  <button class="ms-btn move"   onclick="msBatchMove()">Move</button>
+  <button class="ms-btn del"    onclick="msBatchDelete()">Delete</button>
+  <button class="ms-btn cancel" onclick="exitMultiSelect()">Cancel</button>
+</div>
+
+<!-- ── Sync modal ── -->
+<div class="custom-alert-wrap" id="syncModal">
+  <div class="custom-alert">
+    <div class="alert-icon">
+      <svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    </div>
+    <h3>Sync Assets</h3>
+    <p>Send files at any time to the bot. They will be securely synced to your Infinity Data Base.</p>
+    <button onclick="closeSyncModal()">Continue</button>
+  </div>
+</div>
+
+<!-- ── Sheet overlay + sheet ── -->
+<div class="sheet-overlay" id="sheetOverlay" onclick="closeSheet()"></div>
+<div class="action-sheet" id="actionSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title heading" id="sheetTitle">Manage</div>
+  <div id="sheetContent"></div>
+</div>
+
+<!-- ── Media modal ── -->
+<div class="modal" id="mediaModal">
+  <button class="icon-btn modal-close" onclick="closeModal()">
+    <svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+  <div id="modalContent" class="modal-media-container"></div>
+</div>
+
+<div id="toast-box"></div>
+
+<!-- ══════════════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════════════ -->
+<script>
+/* ── Telegram init ── */
+const tg = window.Telegram.WebApp;
+tg.expand(); tg.ready();
+try { tg.setHeaderColor('#020204'); tg.setBackgroundColor('#020204'); tg.setBottomBarColor('#020204'); } catch(e){}
+
+const user = tg.initDataUnsafe?.user;
+document.getElementById('userName').innerText   = user?.first_name || 'Bekhruz';
+document.getElementById('userAvatar').innerText = (user?.first_name || 'B').charAt(0);
+
+/* ── Firebase init ── */
+const firebaseConfig = {
+  apiKey: "AIzaSyAcjsiCN8ZQUC8ON1j_2WKscL5uL_c-PCo",
+  authDomain: "infinity-storage-2d202.firebaseapp.com",
+  projectId: "infinity-storage-2d202",
+  storageBucket: "infinity-storage-2d202.firebasestorage.app",
+  messagingSenderId: "550288198491",
+  appId: "1:550288198491:web:fd415ba17c97114a87687e",
+  measurementId: "G-WRXHW470HG"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+/* ── Constants ── */
+const PAGE_SIZE = 20;
+
+/* ── Global state ── */
+let globalFiles   = [];           // all files loaded so far (current folder context)
+let activeFolder  = null;
+let searchQuery   = '';
+let targetedFolder = null;
+let targetedFile   = null;
+
+// pagination (Firestore cursor-based)
+let pgOffset      = 0;      // just a running counter, used for demo-data fallback
+let pgTotal       = 0;
+let pgLoading     = false;
+let pgHasMore     = true;
+let pgObserver    = null;
+let lastVisibleDoc = null;
+let liveUnsub      = null;  // unsubscribe fn for the realtime listener
+
+// multi-select
+let isMultiSelect = false;
+let selectedIds   = new Set();    // internalId values
+
+/* ── Folder definitions ── */
+let folders = [
+  { id:'texts',     name:'Texts',     emoji:'📝', accent:'#a078ff', bg:'rgba(160,120,255,.1)',  protected:true,  autoTypes:['text'] },
+  { id:'documents', name:'Documents', emoji:'📄', accent:'#5b8cff', bg:'rgba(91,140,255,.1)',   protected:true,  autoTypes:['document','audio','voice'] },
+  { id:'media',     name:'Media',     emoji:'🖼️', accent:'#00d98a', bg:'rgba(0,217,138,.1)',    protected:true,  autoTypes:['photo','video','animation','video_note'] },
+  { id:'personal',  name:'Personal',  emoji:'🔒', accent:'#ff4e68', bg:'rgba(255,78,104,.08)', protected:false, autoTypes:[] },
+];
+
+/* ── Helpers ── */
+const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function filesInFolder(fid) {
+  const fd = folders.find(f=>f.id===fid);
+  if (!fd) return [];
+  if (fd.autoTypes.length) return globalFiles.filter(f=>fd.autoTypes.includes(f.type));
+  return globalFiles.filter(f=>f.folder===fid);
+}
+
+function resolveFolder(file) {
+  for (const f of folders) if (f.autoTypes.includes(file.type)) return f.id;
+  return 'personal';
+}
+
+/* ══════════════════════════════════════════════════════════
+   INIT & DATA LOADING
+══════════════════════════════════════════════════════════ */
+async function initApp() {
+  updateStorageUI(0, 0);
+  renderFilesView();
+  subscribeLive();
+  setTimeout(()=>document.getElementById('app-loader').classList.add('hidden'), 400);
+}
+
+/* ── Firestore helpers ── */
+function currentUid() {
+  return String(user?.id || '8597789604');
+}
+
+function filesQuery() {
+  return db.collection('files')
+    .where('user_id', '==', currentUid())
+    .orderBy('timestamp', 'desc');
+}
+
+function docToFile(doc) {
+  const d = doc.data() || {};
+  return {
+    internalId: doc.id,
+    type: d.type || 'text',
+    text: d.text || '',
+    url: d.url || null,
+  };
+}
+
+async function fetchPage(cursor) {
+  let q = filesQuery().limit(PAGE_SIZE);
+  if (cursor) q = q.startAfter(cursor);
+  const snap = await q.get();
+  return {
+    files: snap.docs.map(docToFile),
+    lastDoc: snap.docs.length ? snap.docs[snap.docs.length - 1] : null,
+    size: snap.size,
+  };
+}
+
+/* Load first page into a folder context */
+async function loadFolderInitial() {
+  pgOffset       = 0;
+  pgTotal        = 0;
+  pgHasMore      = true;
+  pgLoading      = false;
+  lastVisibleDoc = null;
+  globalFiles = [];
+  document.getElementById('folderGallery').innerHTML = '';
+
+  // Total count (for the storage-used UI); falls back gracefully if the
+  // aggregate query isn't available on the SDK version being served.
+  try {
+    const countSnap = await filesQuery().count().get();
+    pgTotal = countSnap.data().count;
+  } catch(e) { /* ignore — updated per-page below instead */ }
+
+  await loadNextPage();
+}
+
+async function loadNextPage() {
+  if (pgLoading || !pgHasMore) return;
+  pgLoading = true;
+
+  // show spinner
+  const gallery = document.getElementById('folderGallery');
+  const spin = document.createElement('div');
+  spin.className = 'load-spinner-row'; spin.id = 'pg-spin';
+  spin.innerHTML = '<div class="mini-spin"></div>';
+  gallery.appendChild(spin);
+
+  try {
+    let files, size;
+    try {
+      const page = await fetchPage(lastVisibleDoc);
+      files = page.files;
+      size  = page.size;
+      lastVisibleDoc = page.lastDoc;
+    } catch(e) {
+      console.error('Firestore fetch error', e);
+      // Demo fallback only on first page (e.g. Firestore not reachable yet)
+      if (pgOffset === 0) {
+        const demo = makeDemoData();
+        files = demo.files.map((f, i) => ({ ...f, internalId: `demo_${i}` }));
+        size  = files.length;
+        pgTotal = demo.total;
+      } else {
+        files = []; size = 0;
+      }
+    }
+
+    const incoming = files.map(f => ({ ...f, folder: f.folder || resolveFolder(f) }));
+    globalFiles.push(...incoming);
+
+    pgOffset  += incoming.length;
+    pgHasMore  = size === PAGE_SIZE;
+    if (!pgTotal) pgTotal = pgOffset;
+
+    updateStorageUI(pgTotal, pgTotal);
+    appendCards(incoming);
+  } catch(e) {
+    console.error('loadNextPage error', e);
+  } finally {
+    document.getElementById('pg-spin')?.remove();
+    pgLoading = false;
+    // If no more pages, disconnect observer
+    if (!pgHasMore && pgObserver) {
+      pgObserver.disconnect();
+      pgObserver = null;
+    }
+  }
+}
+
+/* ── Realtime sync ──────────────────────────────────────────────────
+   This is what fixes the original bug: instead of waiting for the app
+   to poll a REST endpoint, Firestore pushes new documents to the client
+   the instant the bot writes them, so a photo you just sent to the bot
+   appears in the mini app immediately without a manual refresh. */
+function subscribeLive() {
+  if (liveUnsub) liveUnsub();
+  liveUnsub = filesQuery().limit(1).onSnapshot(snap => {
+    snap.docChanges().forEach(change => {
+      if (change.type !== 'added') return;
+      const f = docToFile(change.doc);
+      if (globalFiles.some(x => x.internalId === f.internalId)) return; // already loaded
+      f.folder = resolveFolder(f);
+      globalFiles.unshift(f);
+      pgTotal++;
+      updateStorageUI(pgTotal, pgTotal);
+      if (activeFolder !== null) prependCard(f);
+      showToast('New asset synced');
+    });
+  }, err => console.error('live listener error', err));
+}
+
+/* Insert a freshly-synced file at the top of the currently open folder,
+   respecting the same filters appendCards() uses. */
+function prependCard(f) {
+  const gallery = document.getElementById('folderGallery');
+  const q = searchQuery.toLowerCase();
+  const fd = folders.find(x => x.id === activeFolder);
+  if (fd) {
+    if (fd.autoTypes.length && !fd.autoTypes.includes(f.type)) return;
+    if (!fd.autoTypes.length && f.folder !== activeFolder) return;
+  }
+  if (q && !(f.text||'').toLowerCase().includes(q) && !f.type.includes(q)) return;
+  gallery.prepend(createCard(f));
+}
+
+function makeDemoData() {
+  return {
+    status:'success', has_more:false, total:6,
+    files:[
+      { type:'photo',    url:'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=400', text:'Abstract Art' },
+      { type:'video',    url:'https://www.w3schools.com/html/mov_bbb.mp4', text:'Sample Video' },
+      { type:'document', text:'Financial_Q3.pdf' },
+      { type:'photo',    url:'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=400', text:'Design Concept' },
+      { type:'text',     text:'Server restart scheduled for midnight.' },
+      { type:'document', text:'Project_Brief.docx' },
+    ]
+  };
+}
+
+function updateStorageUI(count, total) {
+  const mb = (count * 3.4).toFixed(1);
+  document.getElementById('dataUsedText').innerText    = `${mb} MB`;
+  document.getElementById('totalFilesCount').innerText = total;
+  const pct = Math.min(10 + count * 2, 45);
+  document.getElementById('dataUsedFill').style.width  = pct + '%';
+}
+
+/* ── IntersectionObserver for infinite scroll ── */
+function setupScrollObserver() {
+  if (pgObserver) pgObserver.disconnect();
+  const sentinel = document.getElementById('load-sentinel');
+  if (!sentinel) return;
+  pgObserver = new IntersectionObserver(entries => {
+    if (entries[0].isIntersecting) loadNextPage();
+  }, { rootMargin: '200px' });
+  pgObserver.observe(sentinel);
+}
+
+/* ══════════════════════════════════════════════════════════
+   FILES VIEW RENDERING
+══════════════════════════════════════════════════════════ */
+function renderFilesView() {
+  updateTopbar();
+  if (activeFolder === null) {
+    document.getElementById('folderGridView').style.display      = '';
+    document.getElementById('folderContentsView').style.display  = 'none';
+    document.getElementById('searchInput').placeholder = 'Search folders…';
+    renderFolderGrid();
+  } else {
+    document.getElementById('folderGridView').style.display      = 'none';
+    document.getElementById('folderContentsView').style.display  = '';
+    document.getElementById('searchInput').placeholder = 'Search in folder…';
+    loadFolderInitial().then(setupScrollObserver);
+  }
+}
+
+function updateTopbar() {
+  const bar = document.getElementById('filesTopbar');
+  if (activeFolder === null) {
+    bar.innerHTML = `
+      <span class="files-topbar-title">Folders</span>
+      <button class="section-action" onclick="createFolder()" style="flex-shrink:0;">+ New</button>`;
+  } else {
+    const fd = folders.find(f=>f.id===activeFolder);
+    bar.innerHTML = `
+      <button class="back-btn" onclick="closeFolder()">
+        <svg class="svg-icon" viewBox="0 0 24 24" style="width:18px;height:18px;"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span class="files-topbar-title">${esc(fd?.name||'Folder')}</span>`;
+  }
+}
+
+/* ── Folder grid ── */
+function renderFolderGrid() {
+  const grid = document.getElementById('folderGrid');
+  const q    = searchQuery.toLowerCase();
+  const vis  = q ? folders.filter(f=>f.name.toLowerCase().includes(q)) : folders;
+  grid.innerHTML = '';
+
+  vis.forEach(fd => {
+    const count = filesInFolder(fd.id).length;
+    const card  = document.createElement('div');
+    card.className = 'folder-card';
+    card.style.setProperty('--folder-accent', fd.accent);
+    card.innerHTML = `
+      <div class="folder-card-icon" style="background:${fd.bg}">${fd.emoji}</div>
+      <div class="folder-card-info">
+        <div class="folder-card-name">${esc(fd.name)}</div>
+        <div class="folder-card-count">${count} ${count===1?'item':'items'}</div>
+      </div>`;
+
+    let timer, isLong=false, startY=0, moved=false;
+    const onStart=e=>{
+      isLong=false; moved=false;
+      startY=e.touches?e.touches[0].clientY:e.clientY;
+      card.classList.add('holding');
+      timer=setTimeout(()=>{ if(!moved){ isLong=true; card.classList.remove('holding'); openFolderSheet(fd); } },500);
+    };
+    const onMove=e=>{
+      const y=e.touches?e.touches[0].clientY:e.clientY;
+      if(Math.abs(y-startY)>10){ moved=true; clearTimeout(timer); card.classList.remove('holding'); }
+    };
+    const onEnd=()=>{ clearTimeout(timer); card.classList.remove('holding'); if(!moved&&!isLong) openFolder(fd.id); };
+    card.addEventListener('touchstart',onStart,{passive:true});
+    card.addEventListener('touchmove', onMove, {passive:true});
+    card.addEventListener('touchend',  onEnd);
+    card.addEventListener('mousedown', onStart);
+    card.addEventListener('mousemove', onMove);
+    card.addEventListener('mouseup',   onEnd);
+    card.addEventListener('mouseleave',()=>{ moved=true; clearTimeout(timer); card.classList.remove('holding'); });
+    grid.appendChild(card);
+  });
+
+  if (!vis.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <svg class="svg-icon" viewBox="0 0 24 24" style="width:36px;height:36px;opacity:.3"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <div style="margin-top:12px;font-family:'Outfit',sans-serif;font-weight:700;font-size:17px;color:var(--text-main)">No folders found</div>
+    </div>`;
+  }
+}
+
+/* ── open / close folder ── */
+function openFolder(fid) {
+  if (isMultiSelect) exitMultiSelect();
+  activeFolder=fid; searchQuery='';
+  document.getElementById('searchInput').value='';
+  tg.HapticFeedback.selectionChanged();
+  renderFilesView();
+}
+function closeFolder() {
+  if (isMultiSelect) exitMultiSelect();
+  activeFolder=null; searchQuery='';
+  document.getElementById('searchInput').value='';
+  tg.HapticFeedback.selectionChanged();
+  renderFilesView();
+}
+
+/* ── Append cards to gallery (used by pagination) ── */
+function appendCards(files) {
+  const gallery = document.getElementById('folderGallery');
+  const q = searchQuery.toLowerCase();
+  files.forEach(f => {
+    if (activeFolder !== null) {
+      const fd = folders.find(x=>x.id===activeFolder);
+      if (!fd) return;
+      if (fd.autoTypes.length && !fd.autoTypes.includes(f.type)) return;
+      if (!fd.autoTypes.length && f.folder !== activeFolder) return;
+    }
+    if (q && !(f.text||'').toLowerCase().includes(q) && !f.type.includes(q)) return;
+    gallery.appendChild(createCard(f));
+  });
+}
+
+/* ── Search inside folder: re-render from existing globalFiles ── */
+function renderFolderContents() {
+  const gallery = document.getElementById('folderGallery');
+  gallery.innerHTML = '';
+  const q  = searchQuery.toLowerCase();
+  const fd = folders.find(x=>x.id===activeFolder);
+  let files = globalFiles.filter(f => {
+    if (fd?.autoTypes.length && !fd.autoTypes.includes(f.type)) return false;
+    if (fd && !fd.autoTypes.length && f.folder !== activeFolder) return false;
+    if (q && !(f.text||'').toLowerCase().includes(q) && !f.type.includes(q)) return false;
+    return true;
+  });
+  if (!files.length) {
+    gallery.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <svg class="svg-icon" viewBox="0 0 24 24" style="width:36px;height:36px;opacity:.3"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <div style="margin-top:12px;font-family:'Outfit',sans-serif;font-weight:700;font-size:17px;color:var(--text-main)">${pgLoading?'Loading…':'Nothing found'}</div>
+    </div>`;
+  } else {
+    files.forEach(f => gallery.appendChild(createCard(f)));
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   CARD FACTORY — video thumbnails + multi-select
+══════════════════════════════════════════════════════════ */
+function createCard(file) {
+  const card = document.createElement('div');
+  card.className  = `grid-item ${file.type}`;
+  card.dataset.id = file.internalId;
+
+  // ── checkmark ring (always in DOM, hidden until multi-select) ──
+  const ring = document.createElement('div');
+  ring.className = 'check-ring';
+  card.appendChild(ring);
+
+  /* content */
+  if (file.type === 'photo' && file.url) {
+    const img = document.createElement('img');
+    img.src = file.url; img.alt = file.text||''; img.loading = 'lazy';
+    card.appendChild(img);
+
+  } else if (['video','animation','video_note'].includes(file.type) && file.url) {
+    /* ── VIDEO THUMBNAIL FIX ──
+       We use a <video> element, seek to 0.5 s once metadata loads,
+       which forces the browser to paint a real frame as the poster.
+       A play-badge overlay makes it obvious it's a video. */
+    const vid = document.createElement('video');
+    vid.className    = 'vid-thumb';
+    vid.src          = file.url;
+    vid.muted        = true;
+    vid.preload      = 'metadata';
+    vid.playsInline  = true;
+    // Seek to first non-black frame
+    vid.addEventListener('loadedmetadata', () => {
+      vid.currentTime = Math.min(0.5, vid.duration * 0.1 || 0.5);
+    }, {once:true});
+    card.appendChild(vid);
+
+    const badge = document.createElement('div');
+    badge.className = 'vid-play-badge';
+    badge.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="rgba(0,0,0,.4)"/><polygon points="10 8 16 12 10 16" fill="white"/></svg>`;
+    card.appendChild(badge);
+
+  } else if (file.type === 'text') {
+    card.style.background = 'linear-gradient(145deg,#14121f 0%,#09080f 100%)';
+    const body = document.createElement('div');
+    body.className = 'text-card-body'; body.textContent = file.text||'';
+    const tag = document.createElement('div');
+    tag.style.cssText = 'position:absolute;bottom:12px;left:12px;font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--blue);text-transform:uppercase;font-family:Outfit,sans-serif';
+    tag.textContent = 'Note';
+    card.appendChild(body); card.appendChild(tag);
+
+  } else {
+    /* document / audio / voice — no URL preview */
+    card.style.cssText += ';display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;text-align:center;gap:10px;';
+    card.innerHTML += `
+      <svg class="svg-icon" viewBox="0 0 24 24" style="width:32px;height:32px;color:var(--text-muted)"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <div style="font-size:12px;font-weight:600;word-break:break-all;color:var(--text-main);line-height:1.35">${esc(file.text||file.type.toUpperCase())}</div>`;
+  }
+
+  /* ── press / long-press logic ── */
+  let timer, isLong=false, startY=0, moved=false;
+
+  const onStart = e => {
+    isLong=false; moved=false;
+    startY = e.touches?e.touches[0].clientY:e.clientY;
+    card.classList.add('holding');
+    timer = setTimeout(()=>{
+      if (moved) return;
+      isLong = true;
+      card.classList.remove('holding');
+      if (isMultiSelect) {
+        // In multi-select: long press opens sheet for just this file
+        targetedFile = file; openSingleFileSheet();
+      } else {
+        enterMultiSelect(file);
+      }
+    }, 500);
+  };
+  const onMove = e => {
+    const y = e.touches?e.touches[0].clientY:e.clientY;
+    if (Math.abs(y-startY)>10){ moved=true; clearTimeout(timer); card.classList.remove('holding'); }
+  };
+  const onEnd = () => {
+    clearTimeout(timer); card.classList.remove('holding');
+    if (moved || isLong) return;
+    if (isMultiSelect) {
+      toggleSelect(file, card); return;
+    }
+    // Normal tap
+    if (['photo','video','animation','video_note'].includes(file.type) && file.url) {
+      openModal(file);
+    } else if (file.type === 'text') {
+      tg.showAlert(file.text||'');
+    } else {
+      tg.showAlert('Secure files are streamed via the Telegram bot interface.');
+    }
+  };
+
+  card.addEventListener('touchstart', onStart, {passive:true});
+  card.addEventListener('touchmove',  onMove,  {passive:true});
+  card.addEventListener('touchend',   onEnd);
+  card.addEventListener('mousedown',  onStart);
+  card.addEventListener('mousemove',  onMove);
+  card.addEventListener('mouseup',    onEnd);
+  card.addEventListener('mouseleave', ()=>{ moved=true; clearTimeout(timer); card.classList.remove('holding'); });
+
+  return card;
+}
+
+/* ══════════════════════════════════════════════════════════
+   MULTI-SELECT
+══════════════════════════════════════════════════════════ */
+function enterMultiSelect(file) {
+  isMultiSelect = true;
+  document.body.classList.add('multi-select');
+  selectedIds.clear();
+  toggleSelect(file, document.querySelector(`.grid-item[data-id="${file.internalId}"]`));
+  tg.HapticFeedback.impactOccurred('medium');
+}
+
+function exitMultiSelect() {
+  isMultiSelect = false;
+  document.body.classList.remove('multi-select');
+  selectedIds.clear();
+  document.querySelectorAll('.grid-item.selected').forEach(el=>el.classList.remove('selected'));
+  document.getElementById('multiselectBar').classList.remove('visible');
+}
+
+function toggleSelect(file, card) {
+  if (!card) return;
+  if (selectedIds.has(file.internalId)) {
+    selectedIds.delete(file.internalId);
+    card.classList.remove('selected');
+  } else {
+    selectedIds.add(file.internalId);
+    card.classList.add('selected');
+  }
+  updateMsBar();
+  tg.HapticFeedback.selectionChanged();
+}
+
+function updateMsBar() {
+  const bar = document.getElementById('multiselectBar');
+  const n   = selectedIds.size;
+  document.getElementById('msCount').textContent = `${n} selected`;
+  if (n > 0) bar.classList.add('visible');
+  else        bar.classList.remove('visible');
+}
+
+function msBatchDelete() {
+  if (!selectedIds.size) return;
+  tg.showConfirm(`Delete ${selectedIds.size} asset(s)?`, confirmed => {
+    if (!confirmed) return;
+    globalFiles = globalFiles.filter(f => !selectedIds.has(f.internalId));
+    exitMultiSelect();
+    renderFolderContents();
+    updateStorageUI(globalFiles.length, pgTotal);
+    showToast(`${selectedIds.size} assets deleted`);
+  });
+}
+
+function msBatchMove() {
+  if (!selectedIds.size) return;
+  const targets = folders.filter(f => !f.autoTypes.length && f.id !== activeFolder);
+  if (!targets.length) { showToast('No manual folders available'); return; }
+
+  document.getElementById('sheetTitle').textContent = `Move ${selectedIds.size} assets to…`;
+  document.getElementById('sheetContent').innerHTML =
+    targets.map(f=>`<button class="sheet-btn" onclick="msBatchMoveTo('${f.id}')">${f.emoji} ${esc(f.name)}</button>`).join('');
+  document.getElementById('actionSheet').classList.add('active');
+  document.getElementById('sheetOverlay').classList.add('active');
+}
+
+function msBatchMoveTo(folderId) {
+  globalFiles.forEach(f => { if (selectedIds.has(f.internalId)) f.folder = folderId; });
+  closeSheet();
+  exitMultiSelect();
+  renderFolderContents();
+  showToast('Assets moved');
+}
+
+/* ══════════════════════════════════════════════════════════
+   FOLDER MANAGEMENT
+══════════════════════════════════════════════════════════ */
+function openFolderSheet(fd) {
+  targetedFolder = fd;
+  document.getElementById('sheetTitle').textContent = fd.name;
+  document.getElementById('sheetContent').innerHTML = `
+    <button class="sheet-btn" onclick="actionRenameFolder()">
+      <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      Rename Folder
+    </button>
+    ${!fd.protected?`<button class="sheet-btn danger" onclick="actionDeleteFolder()">
+      <svg class="svg-icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      Delete Folder
+    </button>`:`<p style="font-size:12px;color:var(--text-muted);text-align:center;padding:10px 0 4px;">Default folders cannot be deleted.</p>`}`;
+  document.getElementById('actionSheet').classList.add('active');
+  document.getElementById('sheetOverlay').classList.add('active');
+  tg.HapticFeedback.impactOccurred('medium');
+}
+
+function actionRenameFolder() {
+  closeSheet();
+  const n = prompt('Rename folder:', targetedFolder?.name||'');
+  if (n?.trim() && targetedFolder) { targetedFolder.name = n.trim(); renderFolderGrid(); showToast('Folder renamed'); }
+  targetedFolder = null;
+}
+
+function actionDeleteFolder() {
+  if (!targetedFolder||targetedFolder.protected){ closeSheet(); return; }
+  globalFiles.forEach(f=>{ if(f.folder===targetedFolder.id) f.folder='personal'; });
+  folders = folders.filter(f=>f.id!==targetedFolder.id);
+  if (activeFolder===targetedFolder.id) activeFolder=null;
+  closeSheet(); renderFilesView(); showToast('Folder deleted'); targetedFolder=null;
+}
+
+function createFolder() {
+  tg.HapticFeedback.impactOccurred('light');
+  const name = prompt('New folder name:');
+  if (!name?.trim()) return;
+  folders.push({ id:'f_'+Date.now(), name:name.trim(), emoji:'📁', accent:'#5b8cff', bg:'rgba(91,140,255,.08)', protected:false, autoTypes:[] });
+  renderFolderGrid(); showToast('Folder created');
+}
+
+/* ── File action sheet (single file) ── */
+function openSingleFileSheet() {
+  const file = targetedFile;
+  document.getElementById('sheetTitle').textContent = file.text||file.type.toUpperCase();
+  document.getElementById('sheetContent').innerHTML = `
+    <button class="sheet-btn" onclick="actionRenameFile()">
+      <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      Rename
+    </button>
+    <button class="sheet-btn" onclick="showMoveFileOptions()">
+      <svg class="svg-icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      Move to Folder…
+    </button>
+    <button class="sheet-btn danger" onclick="actionDeleteFile()">
+      <svg class="svg-icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      Delete
+    </button>`;
+  document.getElementById('actionSheet').classList.add('active');
+  document.getElementById('sheetOverlay').classList.add('active');
+  tg.HapticFeedback.impactOccurred('heavy');
+}
+
+function openFileSheet(file) { targetedFile = file; openSingleFileSheet(); }
+
+function actionRenameFile() {
+  closeSheet();
+  const n = prompt('New name:', targetedFile?.text||'');
+  if (n?.trim() && targetedFile) { targetedFile.text=n.trim(); renderFolderContents(); showToast('Renamed'); }
+  targetedFile=null;
+}
+
+function showMoveFileOptions() {
+  const avail = folders.filter(f=>!f.autoTypes.length && f.id!==targetedFile?.folder);
+  document.getElementById('sheetTitle').textContent = 'Move to Folder';
+  document.getElementById('sheetContent').innerHTML = avail.length
+    ? avail.map(f=>`<button class="sheet-btn" onclick="actionMoveFile('${f.id}')">${f.emoji} ${esc(f.name)}</button>`).join('')
+    : `<p style="color:var(--text-muted);text-align:center;padding:20px 0">No other folders available.</p>`;
+}
+
+function actionMoveFile(fid) {
+  if (targetedFile){ targetedFile.folder=fid; renderFolderContents(); showToast('Moved'); }
+  closeSheet(); targetedFile=null;
+}
+
+function actionDeleteFile() {
+  if (targetedFile){
+    globalFiles=globalFiles.filter(f=>f.internalId!==targetedFile.internalId);
+    updateStorageUI(globalFiles.length,pgTotal);
+    renderFolderContents(); showToast('Deleted');
+  }
+  closeSheet(); targetedFile=null;
+}
+
+/* ══════════════════════════════════════════════════════════
+   NAVIGATION & MODALS
+══════════════════════════════════════════════════════════ */
+function switchTab(tabId, navBtn) {
+  if (isMultiSelect) exitMultiSelect();
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-'+tabId).classList.add('active');
+  if (navBtn){ document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active')); navBtn.classList.add('active'); }
+  if (tabId==='files'){ searchQuery=''; document.getElementById('searchInput').value=''; renderFilesView(); }
+  window.scrollTo(0,0);
+  tg.HapticFeedback.selectionChanged();
+}
+
+function handleSearch() {
+  searchQuery = document.getElementById('searchInput').value;
+  if (activeFolder===null) renderFolderGrid();
+  else renderFolderContents();
+}
+
+function openSyncModal()  { document.getElementById('syncModal').classList.add('active');    tg.HapticFeedback.impactOccurred('medium'); }
+function closeSyncModal() { document.getElementById('syncModal').classList.remove('active'); }
+
+function closeSheet() {
+  document.getElementById('actionSheet').classList.remove('active');
+  document.getElementById('sheetOverlay').classList.remove('active');
+}
+
+function openModal(file) {
+  document.getElementById('modalContent').innerHTML = file.type==='photo'
+    ? `<img src="${esc(file.url)}" alt="">`
+    : `<video src="${esc(file.url)}" controls autoplay playsinline loop></video>`;
+  document.getElementById('mediaModal').classList.add('active');
+  tg.HapticFeedback.impactOccurred('light');
+}
+
+function closeModal() {
+  document.getElementById('mediaModal').classList.remove('active');
+  setTimeout(()=>{ document.getElementById('modalContent').innerHTML=''; },300);
+}
+
+function toggleAccordion(el) {
+  el.classList.toggle('open');
+  const b=el.querySelector('.accordion-body');
+  b.style.maxHeight=el.classList.contains('open')?b.scrollHeight+'px':'0';
+  tg.HapticFeedback.impactOccurred('light');
+}
+
+function showToast(msg) {
+  const box=document.getElementById('toast-box');
+  const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  box.appendChild(t); setTimeout(()=>t.remove(),3000);
+}
+
+window.onload = initApp;
+</script>
+</body>
+</html>
